@@ -1,20 +1,41 @@
 <?php
+    // most code by Jsundt (https://github.com/jsundt/php-music-folder)
+
     $config['formats'] = array('mp3', 'm4a', 'wav');
     include "getid3.mini.php";
+
+    error_reporting(0);
+
+    // http://php.net/manual/en/function.scandir.php
+    function find_all_files($dir) { 
+        $root = scandir($dir); 
+        foreach($root as $value) 
+        { 
+            if($value === '.' || $value === '..') {continue;} 
+            if(is_file("$dir/$value")) {$result[]="$dir/$value";continue;} 
+            foreach(find_all_files("$dir/$value") as $value) 
+            { 
+                $result[]= $value;
+            } 
+        } 
+        return $result; 
+    } 
     
     function getTracks()
     {
         global $config;
         $dir = realpath(dirname(__FILE__));
-        
         $id3 = new getid3();
+
+        $files = find_all_files($dir);
         
-        for ($tracks = array(), $handle = opendir($dir); ($handle && FALSE !== ($file = readdir($handle)));) {
+        $tracks = array();
+        foreach($files as $file) {
             if(in_array(pathinfo($file, PATHINFO_EXTENSION), $config['formats'])) {
                 try {
                     $info = $id3->analyze($file);
                     $track = array(
-                        'path' => $file,
+                        'path' => str_replace($dir . "/", "", $file) ,
                         'title'     => isset($info['tags_html']['id3v1']['title'][0]) ? $info['tags_html']['id3v1']['title'][0] : @$info['comments']['title'][0],
                         'artist'    => isset($info['tags_html']['id3v1']['artist'][0]) ? $info['tags_html']['id3v1']['artist'][0] : @$info['comments']['artist'][0],
                         'album'    => isset($info['tags_html']['id3v1']['album'][0]) ? $info['tags_html']['id3v1']['album'][0] : @$info['comments']['album'][0]
@@ -174,7 +195,7 @@ html,body,div,span,object,iframe,h1,h2,h3,h4,h5,h6,p,blockquote,pre,abbr,address
                     
                     <tbody>
                         <?php foreach($tracks as $number => $track): ?>
-                        <tr>
+                        <tr class="files">
                             <td class="number"><?php echo $number+1?></td>
                             <td class="name"><a href="<?php echo $track['path']?>" class="playtrack"><?php echo $track['title'] ? $track['title'] : $track['path']?></a></td>
                             <td class="artist"><?php echo $track['artist']?></td>
@@ -194,6 +215,23 @@ html,body,div,span,object,iframe,h1,h2,h3,h4,h5,h6,p,blockquote,pre,abbr,address
         $(".playtrack").click( changeTrack );
 		
 		var playing = null;
+
+        $("#jquery_jplayer_1").bind($.jPlayer.event.ended + ".jp-repeat", function(event) { // Using ".jp-repeat" namespace so we can easily remove this event
+            if(playing != null) { 
+                var next = playing.next('tr');
+
+                if (!next.length) {
+                    next = $('.files').first();
+                }
+                playing.removeClass('playing');
+
+                playing = next;
+                next.addClass('playing');
+                $("#jquery_jplayer_1").jPlayer("setMedia", { mp3: next.find('.playtrack').attr("href")}).jPlayer("play");
+            }
+
+            return false;
+        });
 		
 		function changeTrack(e) {
 		    if(playing != null) playing.removeClass('playing');
